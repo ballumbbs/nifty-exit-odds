@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Nifty Exit Odds</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a trading slip — your plan on the left, the outcome split and target ladder on the right; the live chain scan runs full width below. Same family as Nifty Option Odds. */
+:root{
+  --bg:#f3f4f7; --panel:#ffffff; --ink:#151a2b; --muted:#5d6479; --line:#dde0e8;
+  --accent:#d9480f; --gain:#14804a; --loss:#c22a3a; --band:#e8ebf3; --time:#8a93ad;
+  --display:"Archivo",system-ui,sans-serif; --body:"Source Sans 3",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1220; --panel:#171b2e; --ink:#e8eaf3; --muted:#9aa1b8; --line:#2a3049;
+  --accent:#ff8a4c; --gain:#3ccf86; --loss:#ff6b7a; --band:#20263d; --time:#5f6886; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1220; --panel:#171b2e; --ink:#e8eaf3; --muted:#9aa1b8; --line:#2a3049;
+  --accent:#ff8a4c; --gain:#3ccf86; --loss:#ff6b7a; --band:#20263d; --time:#5f6886; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1120px;margin:0 auto;padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+header h1{font-family:var(--display);font-weight:800;font-size:clamp(26px,4vw,36px);margin:0;letter-spacing:-.01em;text-wrap:balance}
+header p{color:var(--muted);margin:6px 0 0;max-width:68ch}
+h2{font-family:var(--display);font-weight:700;font-size:18px;margin:0;text-wrap:balance}
+.grid{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:20px}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0}
+.label{font-family:var(--display);font-weight:700;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+form{display:grid;gap:12px}
+fieldset{border:0;margin:0;padding:0;display:grid;gap:10px}
+legend{padding:0;margin-bottom:8px}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{text-align:center;padding:9px;font-family:var(--display);font-weight:700;cursor:pointer;color:var(--muted)}
+.seg input:checked+label{background:var(--ink);color:var(--bg)}
+.seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:-2px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.f{display:grid;gap:4px;min-width:0}
+.f span{font-size:13px;color:var(--muted)}
+.f input{font-family:var(--mono);font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);width:100%;box-sizing:border-box;font-variant-numeric:tabular-nums}
+.f input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+.hint{font-size:12.5px;color:var(--muted);margin:0}
+.divider{border:0;border-top:1px solid var(--line);margin:4px 0}
+
+.right{display:grid;gap:18px;align-content:start}
+.split{display:grid;gap:10px}
+.bar{display:flex;height:34px;border-radius:7px;overflow:hidden;background:var(--band)}
+.bar i{display:block;height:100%;transition:width .3s}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+.bar .t{background:var(--gain)} .bar .s{background:var(--loss)} .bar .x{background:var(--time)}
+.legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.leg{display:grid;gap:2px;min-width:0}
+.leg small{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.leg small::before{content:"";width:10px;height:10px;border-radius:2px;background:var(--c);flex:none}
+.leg b{font-family:var(--display);font-weight:800;font-size:clamp(28px,5vw,40px);line-height:1.05;font-variant-numeric:tabular-nums}
+.say{margin:0;max-width:68ch}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+@media (max-width:540px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.legend b{font-size:26px}}
+.stat{background:var(--panel);padding:12px;min-width:0}
+.stat b{display:block;font-family:var(--mono);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
+.stat small{color:var(--muted);font-size:12.5px}
+.pos{color:var(--gain)} .neg{color:var(--loss)}
+
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-family:var(--display);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:9px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;font-weight:700}
+td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;font-family:var(--mono);font-size:13.5px;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+th:first-child,td:first-child{text-align:left}
+tr.cur td{background:var(--band)}
+.ladder td:first-child{font-weight:600}
+
+.chainhead{display:flex;flex-wrap:wrap;gap:12px;align-items:end;justify-content:space-between}
+.chainhead p{margin:4px 0 0;max-width:72ch}
+textarea{width:100%;box-sizing:border-box;min-height:84px;font-family:var(--mono);font-size:12.5px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);resize:vertical}
+.btns{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{font-family:var(--display);font-weight:700;font-size:14px;padding:9px 15px;border-radius:8px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.status{font-size:13.5px;color:var(--muted);margin:0}
+.status.err{color:var(--loss)}
+.pill{display:inline-block;font-family:var(--display);font-weight:700;font-size:12px;padding:2px 9px;border-radius:99px;border:1px solid currentColor;color:var(--accent)}
+.chain table{min-width:640px}
+.chain th.k,.chain td.k{text-align:center;background:var(--band);font-weight:600}
+.chain tr.atm td.k{color:var(--accent)}
+.chain td.c{padding:0}
+.cell{all:unset;box-sizing:border-box;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%;padding:8px 10px;cursor:pointer;text-align:right}
+.cell:hover,.cell:focus-visible{background:var(--band)}
+.cell:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.cell.sel{outline:2px solid var(--accent);outline-offset:-2px}
+.sub{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.chain th.c{padding:6px 10px}
+.steps{margin:0;padding-left:20px;display:grid;gap:6px;max-width:75ch}
+.steps code,.note code{font-family:var(--mono);font-size:13px;background:var(--band);padding:1px 5px;border-radius:4px}
+.note{font-size:13.5px;color:var(--muted);max-width:78ch;margin:0}
+.note b{color:var(--ink)}
+body{margin:0}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Nifty Exit Odds</h1>
+    <p>For buying a Nifty call or put with a fixed plan: a profit target, a stop-loss and a maximum holding time. See how often each exit happens first, using the volatility already priced into the option, and what the plan averages per trade after charges.</p>
+  </header>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="tradeH">
+      <form id="f" autocomplete="off">
+        <fieldset>
+          <legend class="label" id="tradeH">The option</legend>
+          <div class="seg">
+            <input type="radio" name="type" id="tCE" value="CE" checked><label for="tCE">Call (CE)</label>
+            <input type="radio" name="type" id="tPE" value="PE"><label for="tPE">Put (PE)</label>
+          </div>
+          <div class="row">
+            <label class="f"><span>Nifty spot</span><input id="spot" type="number" step="0.05" value="25850"></label>
+            <label class="f"><span>Strike</span><input id="strike" type="number" step="50" value="25900"></label>
+          </div>
+          <div class="row">
+            <label class="f"><span>Premium (LTP ₹)</span><input id="prem" type="number" step="0.05" value="123.35"></label>
+            <label class="f"><span>Trading days left</span><input id="days" type="number" step="0.05" min="0.01" value="3"></label>
+          </div>
+          <label class="f"><span>IV % (blank = worked out from premium)</span><input id="iv" type="number" step="0.1" placeholder="auto"></label>
+        </fieldset>
+        <hr class="divider">
+        <fieldset>
+          <legend class="label">Your exit plan</legend>
+          <div class="row3">
+            <label class="f"><span>Target +%</span><input id="tgt" type="number" step="1" min="1" value="30"></label>
+            <label class="f"><span>Stop −%</span><input id="stop" type="number" step="1" min="1" max="99" value="20"></label>
+            <label class="f"><span>Hold (min)</span><input id="hold" type="number" step="5" min="5" value="60"></label>
+          </div>
+          <label class="f"><span>Your expected Nifty move during the hold (points, 0 = no view)</span><input id="view" type="number" step="5" value="0"></label>
+        </fieldset>
+        <hr class="divider">
+        <fieldset>
+          <legend class="label">Size and costs</legend>
+          <div class="row3">
+            <label class="f"><span>Lot size</span><input id="lot" type="number" step="1" min="1" value="65"></label>
+            <label class="f"><span>Lots</span><input id="lots" type="number" step="1" min="1" value="1"></label>
+            <label class="f"><span>Charges ₹</span><input id="chg" type="number" step="1" min="0" value="60"></label>
+          </div>
+          <p class="hint">Charges are for the whole round trip: brokerage, STT, exchange fees and GST. Check a recent Groww contract note and the current lot size.</p>
+        </fieldset>
+      </form>
+    </section>
+
+    <section class="panel right" aria-live="polite">
+      <div class="split">
+        <div class="label">Which exit happens first</div>
+        <div class="bar" role="img" id="barImg" aria-label="Outcome split"><i class="t" id="bT"></i><i class="s" id="bS"></i><i class="x" id="bX"></i></div>
+        <div class="legend">
+          <div class="leg" style="--c:var(--gain)"><small>Target hit</small><b id="pT">–</b></div>
+          <div class="leg" style="--c:var(--loss)"><small>Stop hit</small><b id="pS">–</b></div>
+          <div class="leg" style="--c:var(--time)"><small>Time runs out</small><b id="pX">–</b></div>
+        </div>
+      </div>
+      <p class="say" id="say"></p>
+      <div class="stats">
+        <div class="stat"><small>Average result per trade</small><b id="avg">–</b></div>
+        <div class="stat"><small>Trades ending in profit</small><b id="prof">–</b></div>
+        <div class="stat"><small>Target hit rate needed to break even</small><b id="bev">–</b></div>
+        <div class="stat"><small>You make if target hits</small><b id="win">–</b></div>
+        <div class="stat"><small>You lose if stop hits</small><b id="lose">–</b></div>
+        <div class="stat"><small>IV used</small><b id="ivu">–</b></div>
+      </div>
+      <div>
+        <div class="label" style="margin-bottom:8px">Other targets, same stop and hold</div>
+        <div class="tbl"><table class="ladder">
+          <thead><tr><th>Target</th><th>Target hit</th><th>Stop hit</th><th>Time out</th><th>Avg per trade</th></tr></thead>
+          <tbody id="ladder"></tbody>
+        </table></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="chainH" style="display:grid;gap:14px">
+    <div class="chainhead">
+      <div>
+        <h2 id="chainH">Live chain scan</h2>
+        <p class="hint">Runs your exit plan on every strike of the latest Groww scan. The scan updates every 5 minutes in market hours and this page reloads it every minute. Tap a strike to load it above.</p>
+      </div>
+      <span class="pill" id="srcPill">Loading…</span>
+    </div>
+    <div class="btns">
+      <button class="btn" type="button" id="refreshBtn">Reload latest scan</button>
+      <button class="btn ghost" type="button" id="pasteToggle">Paste a chain instead</button>
+      <p class="status" id="status" role="status"></p>
+    </div>
+    <div id="pasteBox" hidden style="display:grid;gap:10px">
+      <textarea id="json" aria-label="Option chain JSON" placeholder='Paste JSON saved by nifty_exit_odds.py, or a Groww get_option_chain response'></textarea>
+      <div class="btns"><button class="btn" type="button" id="loadBtn">Scan pasted chain</button><button class="btn ghost" type="button" id="exBtn">Use example chain</button></div>
+    </div>
+    <div class="tbl chain">
+      <table>
+        <thead>
+          <tr><th class="c"><div class="sub"><span>CE LTP</span><span>Target hit</span><span>Avg ₹</span></div></th><th class="k">Strike</th><th class="c"><div class="sub"><span>PE LTP</span><span>Target hit</span><span>Avg ₹</span></div></th></tr>
+        </thead>
+        <tbody id="chainBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="howH" style="display:grid;gap:12px">
+    <h2 id="howH">Where the prices come from</h2>
+    <ol class="steps">
+      <li>A GitHub Actions workflow in this repository runs every 5 minutes, Monday to Friday, 09:15–15:30 IST.</li>
+      <li>It signs in to the Groww Trade API with the TOTP token and secret saved as repository secrets, reads the Nifty option chain and saves <code>data/latest.json</code>.</li>
+      <li>Until those secrets are added, it publishes made-up demo prices and this page says so.</li>
+      <li>The scanner only reads prices. It contains no code that can place, change or cancel an order.</li>
+    </ol>
+  </section>
+
+  <p class="note"><b>How to read this.</b> Each option's own price tells us how much movement the market expects. The page simulates 4,000 possible Nifty paths with that volatility, re-prices the option every 5 minutes, and counts which exit comes first. With your expected move at 0 these are the market's odds, not a forecast, and the average result usually comes out slightly negative: that gap is the cost of buying options without an edge. Put in the move you expect to see how much edge your plan needs. Weekends and holidays are not counted, gaps past a stop can make losses bigger, and a high "target hit" chance often comes with a small target or a wide stop.</p>
+</div>
+
+<script>
+const EXAMPLE={"source":"nifty_exit_odds.py","underlying":"NIFTY","spot":25850.0,"expiry":"2026-11-10","trading_days_left":3.0,"fetched":"example","strikes":[{"k":25350,"ce":523.8,"pe":23.8},{"k":25400,"ce":479.1,"pe":29.1},{"k":25450,"ce":435.45,"pe":35.45},{"k":25500,"ce":392.95,"pe":42.95},{"k":25550,"ce":351.9,"pe":51.9},{"k":25600,"ce":312.45,"pe":62.45},{"k":25650,"ce":274.8,"pe":74.8},{"k":25700,"ce":239.15,"pe":89.15},{"k":25750,"ce":205.75,"pe":105.75},{"k":25800,"ce":174.7,"pe":124.7},{"k":25850,"ce":146.3,"pe":146.3},{"k":25900,"ce":123.35,"pe":173.35},{"k":25950,"ce":103.05,"pe":203.05},{"k":26000,"ce":85.3,"pe":235.3},{"k":26050,"ce":69.95,"pe":269.95},{"k":26100,"ce":56.85,"pe":306.85},{"k":26150,"ce":45.75,"pe":345.75},{"k":26200,"ce":36.45,"pe":386.45},{"k":26250,"ce":28.8,"pe":428.8},{"k":26300,"ce":22.55,"pe":472.55},{"k":26350,"ce":17.5,"pe":517.5}]};
+const SESSION=375, YEAR=252, R=0, PATHS=4000, CHAIN_PATHS=2000;
+const $=id=>document.getElementById(id);
+
+function ncdf(x){const z=Math.abs(x)/Math.SQRT2,t=1/(1+0.3275911*z),y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-z*z);return 0.5*(1+(x<0?-y:y))}
+function bs(call,S,K,T,r,s){if(T<=1e-9)return call?Math.max(S-K,0):Math.max(K-S,0);const sq=s*Math.sqrt(T),d1=(Math.log(S/K)+(r+0.5*s*s)*T)/sq,d2=d1-sq,df=Math.exp(-r*T);return call?S*ncdf(d1)-K*df*ncdf(d2):K*df*ncdf(-d2)-S*ncdf(-d1)}
+function impliedVol(call,S,K,T,r,P){let lo=.005,hi=3;if(bs(call,S,K,T,r,lo)>P||bs(call,S,K,T,r,hi)<P)return null;for(let i=0;i<80;i++){const m=(lo+hi)/2;bs(call,S,K,T,r,m)>P?hi=m:lo=m}return(lo+hi)/2}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const zCache=new Map();
+// Paths come in mirrored pairs (z and -z) so up and down moves balance exactly and no strike gets a directional bias.
+function getZ(n,steps){const key=n+"x"+steps;if(zCache.has(key))return zCache.get(key);const rnd=mulberry32(7),half=n/2*steps,z=new Float64Array(n*steps);for(let i=0;i<half;i+=2){const u=rnd()||1e-12,v=rnd(),m=Math.sqrt(-2*Math.log(u));z[i]=m*Math.cos(2*Math.PI*v);if(i+1<half)z[i+1]=m*Math.sin(2*Math.PI*v)}for(let i=0;i<half;i++)z[half+i]=-z[i];zCache.set(key,z);return z}
+
+// Simulate the plan: re-price every 5 min, exit at target (limit), stop (fills at market) or end of hold.
+function exitOdds(o,n){
+  const holdMin=Math.min(o.hold,o.days*SESSION),T0=o.days/YEAR;
+  const steps=Math.max(3,Math.min(150,Math.round(holdMin/5))),holdY=Math.min(holdMin/SESSION/YEAR,T0),dt=holdY/steps;
+  const mu=Math.log(Math.max(1e-6,1+o.view/o.S))/holdY,a=(mu-0.5*o.sig*o.sig)*dt,b=o.sig*Math.sqrt(dt);
+  const up=o.P*(1+o.tgt),dn=o.P*(1-o.stop),Z=getZ(n,steps),ln0=Math.log(o.S);
+  let nT=0,nS=0,nX=0,sum=0,nP=0;
+  for(let i=0;i<n;i++){
+    let lnS=ln0,out=0,ex=0;const base=i*steps;
+    for(let j=0;j<steps;j++){
+      lnS+=a+b*Z[base+j];
+      const px=bs(o.call,Math.exp(lnS),o.K,Math.max(T0-(j+1)*dt,0),R,o.sig);
+      if(px>=up){out=1;ex=up;break}
+      if(px<=dn){out=-1;ex=px;break}
+      if(j===steps-1)ex=px;
+    }
+    if(out===1)nT++;else if(out===-1)nS++;else nX++;
+    const pl=(ex-o.P)*o.units-o.charges;sum+=pl;if(pl>0)nP++;
+  }
+  return{pT:nT/n,pS:nS/n,pX:nX/n,avg:sum/n,pProf:nP/n};
+}
+
+const inr=v=>(v<0?"−₹":"₹")+Math.abs(Math.round(v)).toLocaleString("en-IN");
+const sinr=v=>(v>0?"+":"")+inr(v);
+const pct=v=>Math.round(v*100)+"%";
+const num=id=>parseFloat($(id).value);
+
+function plan(){
+  return{tgt:num("tgt")/100,stop:Math.min(num("stop"),99)/100,hold:num("hold"),view:num("view")||0,
+    units:(num("lot")||0)*(num("lots")||1),charges:num("chg")||0};
+}
+
+function runSingle(){
+  const call=document.querySelector('input[name=type]:checked').value==="CE";
+  const S=num("spot"),K=num("strike"),P=num("prem"),days=num("days"),p=plan();
+  if(!(S>0&&K>0&&P>0&&days>0&&p.tgt>0&&p.stop>0&&p.hold>0)){$("say").textContent="Fill in spot, strike, premium, days left and your target, stop and hold time.";return}
+  const T=days/YEAR;
+  const sig=$("iv").value===""?impliedVol(call,S,K,T,R,P):num("iv")/100;
+  if(!sig){$("say").textContent="This premium doesn't fit the strike and days left (it may be below the option's intrinsic value). Check the numbers.";return}
+  const base={call,S,K,P,days,sig,...p};
+  const r=exitOdds(base,PATHS);
+  $("bT").style.width=r.pT*100+"%";$("bS").style.width=r.pS*100+"%";$("bX").style.width=r.pX*100+"%";
+  $("barImg").setAttribute("aria-label",`Target first ${pct(r.pT)}, stop first ${pct(r.pS)}, time runs out ${pct(r.pX)}`);
+  $("pT").textContent=pct(r.pT);$("pS").textContent=pct(r.pS);$("pX").textContent=pct(r.pX);
+  const avgEl=$("avg");avgEl.textContent=sinr(r.avg);avgEl.className=r.avg>=0?"pos":"neg";
+  $("prof").textContent=pct(r.pProf);
+  const win=P*p.tgt*p.units-p.charges,lose=P*p.stop*p.units+p.charges;
+  $("win").textContent=sinr(win);$("win").className=win>=0?"pos":"neg";
+  $("lose").textContent=inr(-lose);$("lose").className="neg";
+  $("bev").textContent=win>0?pct(lose/(win+lose)):"never";
+  $("ivu").textContent=(sig*100).toFixed(1)+"%";
+  const holdMin=Math.min(p.hold,days*SESSION);
+  const mv=Math.round(S*sig*Math.sqrt(holdMin/SESSION/YEAR));
+  let msg=`Over ${Math.round(holdMin)} minutes Nifty typically moves about ±${mv} points. `;
+  msg+=r.pT>=r.pS?`Your target is reached first more often than your stop, ${pct(r.pT)} against ${pct(r.pS)}. `:`Your stop is reached first more often than your target, ${pct(r.pS)} against ${pct(r.pT)}. `;
+  msg+=r.avg<0?`On average the plan loses ${inr(-r.avg).replace("−","")} a trade, so it needs a real directional edge to pay off.`:`On average the plan makes ${inr(r.avg)} a trade${p.view?", but only because of the move you entered":""}.`;
+  $("say").textContent=msg;
+  // ladder
+  const tg=Math.round(p.tgt*100),set=[...new Set([10,20,30,50,75,100,tg])].sort((x,y)=>x-y);
+  $("ladder").innerHTML=set.map(t=>{const q=exitOdds({...base,tgt:t/100},PATHS);
+    return `<tr class="${t===tg?"cur":""}"><td>+${t}%</td><td>${pct(q.pT)}</td><td>${pct(q.pS)}</td><td>${pct(q.pX)}</td><td class="${q.avg>=0?"pos":"neg"}">${sinr(q.avg)}</td></tr>`}).join("");
+}
+
+// ---------- chain
+let chain=null,chainToken=0,selected=null;
+function parseChain(txt){
+  const o=JSON.parse(txt);
+  if(Array.isArray(o.strikes)&&o.spot)return{spot:+o.spot,days:o.trading_days_left?+o.trading_days_left:null,expiry:o.expiry||"",fetched:o.fetched||"",rows:o.strikes.map(r=>({k:+r.k,ce:r.ce==null?null:+r.ce,pe:r.pe==null?null:+r.pe}))};
+  if(o.underlying_ltp&&o.strikes&&!Array.isArray(o.strikes))return{spot:+o.underlying_ltp,days:null,expiry:"",fetched:"",rows:Object.entries(o.strikes).map(([k,v])=>({k:+k,ce:v.CE&&v.CE.ltp!=null?+v.CE.ltp:null,pe:v.PE&&v.PE.ltp!=null?+v.PE.ltp:null}))};
+  throw new Error("format");
+}
+function loadChain(c,label){
+  chain=c;chain.rows.sort((a,b)=>a.k-b.k);chain.rows=chain.rows.filter(r=>Math.abs(r.k-c.spot)<=600);
+  if(c.days)$("days").value=c.days;
+  $("spot").value=c.spot;
+  $("srcPill").textContent=label;
+  scanChain();
+}
+function sideCell(r,side){
+  const P=r[side];
+  if(!r[side+"Res"])return `<td class="c"><div class="cell" style="cursor:default;color:var(--muted)"><span>${P?P.toFixed(2):"–"}</span><span>–</span><span>–</span></div></td>`;
+  const q=r[side+"Res"],isSel=selected&&selected.k===r.k&&selected.side===side;
+  return `<td class="c"><button type="button" class="cell${isSel?" sel":""}" data-k="${r.k}" data-side="${side}" aria-label="${r.k} ${side.toUpperCase()} premium ${P}, target hit ${pct(q.pT)}, average ${sinr(q.avg)}"><span>${P.toFixed(2)}</span><span>${pct(q.pT)}</span><span class="${q.avg>=0?"pos":"neg"}">${sinr(q.avg)}</span></button></td>`;
+}
+function renderChain(){
+  if(!chain){$("chainBody").innerHTML="";return}
+  let atm=chain.rows.reduce((b,r)=>Math.abs(r.k-chain.spot)<Math.abs(b.k-chain.spot)?r:b,chain.rows[0]);
+  $("chainBody").innerHTML=chain.rows.map(r=>`<tr class="${r===atm?"atm":""}">${sideCell(r,"ce")}<td class="k">${r.k}</td>${sideCell(r,"pe")}</tr>`).join("");
+}
+function scanChain(){
+  if(!chain)return;
+  const token=++chainToken,days=num("days"),p=plan();
+  if(!(days>0&&p.tgt>0&&p.stop>0&&p.hold>0))return;
+  chain.rows.forEach(r=>{delete r.ceRes;delete r.peRes});
+  renderChain();
+  let i=0;$("status").className="status";$("status").textContent="Scanning strikes…";
+  const step=()=>{
+    if(token!==chainToken)return;
+    const end=Math.min(i+3,chain.rows.length);
+    for(;i<end;i++){const r=chain.rows[i];
+      for(const side of["ce","pe"]){const P=r[side];if(!(P>=1))continue;const call=side==="ce";
+        const sig=impliedVol(call,chain.spot,r.k,days/YEAR,R,P);if(!sig)continue;
+        r[side+"Res"]=exitOdds({call,S:chain.spot,K:r.k,P,days,sig,...p},CHAIN_PATHS)}}
+    renderChain();
+    if(i<chain.rows.length)setTimeout(step,0);
+    else{$("status").textContent=`Nifty ${chain.spot.toLocaleString("en-IN")}${chain.expiry?" · expiry "+chain.expiry:""} · ${days} trading days left · plan +${Math.round(p.tgt*100)}% / −${Math.round(p.stop*100)}% / ${p.hold} min`}
+  };
+  step();
+}
+function pick(k,side){
+  const r=chain.rows.find(x=>x.k===k);if(!r||!r[side])return;
+  selected={k,side};
+  (side==="ce"?$("tCE"):$("tPE")).checked=true;
+  $("strike").value=k;$("prem").value=r[side];$("spot").value=chain.spot;$("iv").value="";
+  renderChain();runSingle();
+}
+$("chainBody").addEventListener("click",e=>{
+  const b=e.target.closest("button.cell");if(!b||!chain)return;
+  const k=+b.dataset.k,side=b.dataset.side,r=chain.rows.find(x=>x.k===k);
+  selected={k,side};
+  (side==="ce"?$("tCE"):$("tPE")).checked=true;
+  $("strike").value=k;$("prem").value=r[side];$("spot").value=chain.spot;$("iv").value="";
+  renderChain();runSingle();
+  $("f").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});
+});
+$("loadBtn").addEventListener("click",()=>{
+  const txt=$("json").value.trim();
+  if(!txt){$("status").className="status err";$("status").textContent="Paste the JSON from the script first.";return}
+  try{const c=parseChain(txt);if(!c.rows.length)throw new Error("empty");selected=null;loadChain(c,c.fetched?"Live · "+c.fetched.replace("T"," ").slice(0,16):"Pasted chain")}
+  catch(err){$("status").className="status err";$("status").textContent="That doesn't look like an option chain. Paste the whole JSON file saved by nifty_exit_odds.py, or Groww's get_option_chain response.";}
+});
+$("exBtn").addEventListener("click",()=>{selected=null;loadChain(JSON.parse(JSON.stringify(EXAMPLE)),"Example chain")});
+$("pasteToggle").addEventListener("click",()=>{const b=$("pasteBox");b.hidden=!b.hidden;$("pasteToggle").textContent=b.hidden?"Paste a chain instead":"Hide paste box"});
+
+// ---------- live data from the GitHub workflow
+let lastFetched="",livePaused=false;
+function ageLabel(iso){const m=Math.round((Date.now()-Date.parse(iso))/60000);return m<1?"just now":m<60?m+" min ago":m<1440?Math.round(m/60)+" h ago":Math.round(m/1440)+" days ago"}
+async function fetchLatest(manual){
+  if(livePaused&&!manual)return;
+  try{
+    const res=await fetch("data/latest.json?t="+Date.now(),{cache:"no-store"});
+    if(!res.ok)throw new Error(res.status);
+    const raw=await res.json();
+    if(raw.fetched===lastFetched&&!manual){$("srcPill").textContent=pillText(raw);return}
+    lastFetched=raw.fetched;livePaused=false;
+    const c=parseChain(JSON.stringify(raw)),keep=selected;
+    loadChain(c,pillText(raw));
+    const target=keep&&chain.rows.find(r=>r.k===keep.k&&r[keep.side])?keep:{k:chain.rows.reduce((b,r)=>Math.abs(r.k-c.spot)<Math.abs(b.k-c.spot)?r:b,chain.rows[0]).k,side:"ce"};
+    pick(target.k,target.side);
+  }catch(e){
+    if(!chain)loadChain(JSON.parse(JSON.stringify(EXAMPLE)),"Example chain");
+    $("status").className="status err";$("status").textContent="No scan published yet. Showing example prices until the GitHub workflow runs.";
+  }
+}
+function pillText(raw){
+  const t=new Date(raw.fetched).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Kolkata"});
+  return (raw.demo?"Demo prices · ":"Groww · ")+t+" IST · "+ageLabel(raw.fetched);
+}
+$("refreshBtn").addEventListener("click",()=>fetchLatest(true));
+$("loadBtn").addEventListener("click",()=>{livePaused=true},true);
+$("exBtn").addEventListener("click",()=>{livePaused=true},true);
+setInterval(()=>fetchLatest(false),60000);
+
+let tSingle,tChain;
+$("f").addEventListener("input",e=>{
+  clearTimeout(tSingle);tSingle=setTimeout(runSingle,150);
+  if(["tgt","stop","hold","view","lot","lots","chg","days"].includes(e.target.id)){clearTimeout(tChain);tChain=setTimeout(scanChain,400)}
+});
+fetchLatest(true).then(runSingle);
+</script>
+</body>
+</html>
