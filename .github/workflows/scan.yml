@@ -1,0 +1,78 @@
+name: Scan Nifty chain
+
+on:
+  schedule:
+    - cron: "*/5 3-10 * * 1-5"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: scan
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Check market hours (IST)
+        id: hours
+        run: |
+          now=$(TZ=Asia/Kolkata date +%H%M)
+          dow=$(TZ=Asia/Kolkata date +%u)
+          if [ "$GITHUB_EVENT_NAME" != "schedule" ]; then
+            echo "open=true" >> "$GITHUB_OUTPUT"
+          elif [ "$dow" -le 5 ] && [ "$now" -ge 912 ] && [ "$now" -le 1535 ]; then
+            echo "open=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Market closed ($now IST). Keeping the last scan online."
+            echo "open=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.hours.outputs.open == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.hours.outputs.open == 'true'
+        with:
+          python-version: "3.11"
+
+      - name: Install packages
+        if: steps.hours.outputs.open == 'true'
+        run: pip install growwapi pyotp numpy
+
+      - name: Fetch the option chain from Groww
+        if: steps.hours.outputs.open == 'true'
+        env:
+          GROWW_TOTP_TOKEN: ${{ secrets.GROWW_TOTP_TOKEN }}
+          GROWW_TOTP_SECRET: ${{ secrets.GROWW_TOTP_SECRET }}
+          NIFTY_EXPIRY: ${{ vars.NIFTY_EXPIRY }}
+          LOT_SIZE: ${{ vars.LOT_SIZE }}
+        run: |
+          args="--out docs/data/latest.json --lot ${LOT_SIZE:-65}"
+          if [ -n "$NIFTY_EXPIRY" ]; then args="$args --expiry $NIFTY_EXPIRY"; fi
+          if [ -z "$GROWW_TOTP_TOKEN" ] || [ -z "$GROWW_TOTP_SECRET" ]; then
+            echo "::warning::Groww secrets are not set yet, so this run uses made-up demo prices."
+            args="$args --demo"
+          fi
+          python scanner/nifty_exit_odds.py $args
+
+      - uses: actions/configure-pages@v5
+        if: steps.hours.outputs.open == 'true'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.hours.outputs.open == 'true'
+        with:
+          path: docs
+
+      - id: deploy
+        if: steps.hours.outputs.open == 'true'
+        uses: actions/deploy-pages@v4
