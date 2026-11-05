@@ -228,10 +228,12 @@ def demo_chain(days_left):
 def analyse(spot, rows, days_left, a):
     T0 = days_left / YEAR_DAYS
     hold = min(a.hold, days_left * SESSION_MIN)
-    steps = max(3, min(150, round(hold / STEP_MIN)))
+    steps = max(3, min(150, round(hold / STEP_MIN))) 
     Z = np.random.default_rng(7).standard_normal((a.paths, steps))  # same paths for every option
-    out = []
     for row in rows:
+         # Same paths for every option, in mirrored pairs (z and -z) so up and down moves balance exactly.
+    half = np.random.default_rng(7).standard_normal((max(1, a.paths // 2), steps))
+    Z = np.vstack([half, -half])
         if abs(row["k"] - spot) > a.range:
             continue
         rec = {"k": row["k"]}
