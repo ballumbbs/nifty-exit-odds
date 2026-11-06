@@ -1,204 +1,67 @@
-// ============================================================================
-//  NIFTY OPTION BUYER CONFLUENCE  (NOBC)  —  TradingView Pine Script v5
-//  Built for: buying Nifty 50 CE / PE intraday (option buyer, no selling)
-// ----------------------------------------------------------------------------
-//  HOW IT WORKS
-//  A signal fires only when ALL 6 filters agree (confluence). Fewer trades,
-//  but each one is with the trend, with momentum, and NOT in a sideways
-//  market (sideways = theta eats option buyers alive).
-//
-//    1. EMA 9 above/below EMA 21              -> short-term trend
-//    2. Supertrend (10, 3) up/down            -> trend confirmation
-//    3. RSI(14) > 55  /  < 45                 -> momentum
-//    4. ADX(14) > 20 and DI+ > DI- (or <)     -> market is trending, not choppy
-//    5. Price above/below VWAP                -> intraday institutional bias
-//    6. 15-min close above/below 15-min EMA50 -> higher-timeframe trend
-//
-//  BUY CE  = all 6 bullish (fires on the first bar they all line up)
-//  BUY PE  = all 6 bearish
-//
-//  RISK RULES (built in)
-//    - Entries only 09:30–14:30 IST (skips opening noise and late theta decay)
-//    - Stop-loss = 1 x ATR on spot, Target = 2 x risk (1:2 reward:risk)
-//    - Exit early if Supertrend flips against you
-//    - Hard square-off at 15:10 IST
-//    - Max 2 trades per day (stops revenge trading)
-//
-//  SETUP
-//    1. TradingView -> Pine Editor -> paste this -> "Add to chart"
-//    2. Chart: NSE:NIFTY (spot) on 5-minute timeframe
-//    3. Open "Strategy Tester" tab to see win rate, profit factor, drawdown
-//    4. Alerts: Create alert -> Condition: NOBC -> "alert() function calls only"
-//
-//  IMPORTANT ABOUT THE BACKTEST
-//    The backtest trades the Nifty SPOT with qty = 65 (1 lot). That is like a
-//    deep ITM option (delta ~1). A real ATM option moves only ~0.5x the spot
-//    AND loses time value (theta) every minute, so real option P&L will be
-//    WORSE than the tester shows. Treat the tester as "was the direction
-//    right?" — then paper-trade for 1 month before using real money.
-// ============================================================================
+# Nifty Exit Odds
 
-//@version=5
-strategy("Nifty Option Buyer Confluence", shorttitle="NOBC", overlay=true, initial_capital=100000, default_qty_type=strategy.fixed, default_qty_value=65, commission_type=strategy.commission.cash_per_order, commission_value=40, max_labels_count=500)
+A web page that shows, for every Nifty call and put near the current price, how often the premium reaches your profit target before your stop-loss within your holding time, and what that plan averages per trade after charges.
 
-// ---------------------------- INPUTS ----------------------------------------
-grpT = "Trend filters"
-emaFastLen = input.int(9, "Fast EMA", minval=1, group=grpT)
-emaSlowLen = input.int(21, "Slow EMA", minval=1, group=grpT)
-stLen      = input.int(10, "Supertrend ATR length", minval=1, group=grpT)
-stMult     = input.float(3.0, "Supertrend multiplier", step=0.1, group=grpT)
-useHtf     = input.bool(true, "Use higher-timeframe filter", group=grpT)
-htfTf      = input.timeframe("15", "Higher timeframe", group=grpT)
-htfEmaLen  = input.int(50, "Higher-TF EMA length", minval=1, group=grpT)
+A GitHub Actions workflow reads the live Nifty option chain from your Groww account every 5 minutes during market hours (Monday to Friday, 09:15–15:30 IST) and publishes it to GitHub Pages. You just open the page.
 
-grpM = "Momentum / strength filters"
-rsiLen     = input.int(14, "RSI length", minval=1, group=grpM)
-rsiBull    = input.float(55, "RSI bullish above", group=grpM)
-rsiBear    = input.float(45, "RSI bearish below", group=grpM)
-useAdx     = input.bool(true, "Use ADX (no-chop) filter", group=grpM)
-adxLen     = input.int(14, "ADX length", minval=1, group=grpM)
-adxMin     = input.float(20, "ADX minimum", group=grpM)
-useVwap    = input.bool(true, "Use VWAP filter", group=grpM)
+**Read-only.** The scanner only reads prices. It has no code that can place, change or cancel an order.
 
-grpR = "Risk management"
-atrLen     = input.int(14, "ATR length", minval=1, group=grpR)
-slMult     = input.float(1.0, "Stop-loss = ATR x", step=0.1, group=grpR)
-rr         = input.float(2.0, "Target = risk x (reward:risk)", step=0.1, group=grpR)
-useStExit  = input.bool(true, "Exit if Supertrend flips", group=grpR)
-maxTrades  = input.int(2, "Max trades per day", minval=1, group=grpR)
-entrySess  = input.session("0930-1430", "Entry window (IST)", group=grpR)
-exitSess   = input.session("1510-1530", "Square-off window (IST)", group=grpR)
-strikeStep = input.int(50, "Strike interval", group=grpR)
+**Not a signal service.** The odds come from the volatility already priced into each option. With no directional view, they are the market's own odds, not a forecast, and the average result is usually slightly negative after charges.
 
-showDash   = input.bool(true, "Show dashboard", group="Display")
+## Setup (about 10 minutes)
 
-// ---------------------------- CALCULATIONS ----------------------------------
-emaF = ta.ema(close, emaFastLen)
-emaS = ta.ema(close, emaSlowLen)
-[stLine, stDir] = ta.supertrend(stMult, stLen)   // stDir < 0 = uptrend
-rsi = ta.rsi(close, rsiLen)
-[diP, diM, adx] = ta.dmi(adxLen, adxLen)
-vw  = ta.vwap(hlc3)
-atr = ta.atr(atrLen)
+### 1. Turn on GitHub Pages
+Repository **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 
-// Higher timeframe values from the LAST CLOSED 15m bar (no repainting)
-htfEma   = request.security(syminfo.tickerid, htfTf, ta.ema(close, htfEmaLen)[1], lookahead=barmerge.lookahead_on)
-htfClose = request.security(syminfo.tickerid, htfTf, close[1], lookahead=barmerge.lookahead_on)
+### 2. Run it once with demo prices
+**Actions → Scan Nifty chain → Run workflow.** When it finishes, your page is live at
+`https://ballumbbs.github.io/nifty-exit-odds/` showing made-up demo prices.
 
-// Individual conditions
-b1 = emaF > emaS
-s1 = emaF < emaS
-b2 = stDir < 0
-s2 = stDir > 0
-b3 = rsi > rsiBull
-s3 = rsi < rsiBear
-b4 = useAdx ? (adx > adxMin and diP > diM) : true
-s4 = useAdx ? (adx > adxMin and diM > diP) : true
-b5 = useVwap ? close > vw : true
-s5 = useVwap ? close < vw : true
-b6 = useHtf ? htfClose > htfEma : true
-s6 = useHtf ? htfClose < htfEma : true
+### 3. Connect Groww
+1. Subscribe to the Groww Trading API (live prices and the option chain need a paid plan): https://groww.in/user/profile/trading-apis
+2. On https://groww.in/trade-api/api-keys open the dropdown next to **Generate API key** and choose **Generate TOTP token**. Copy the TOTP token and the TOTP secret.
+3. In this repository go to **Settings → Secrets and variables → Actions → New repository secret** and add:
+   - `GROWW_TOTP_TOKEN` = the TOTP token
+   - `GROWW_TOTP_SECRET` = the TOTP secret
+4. Run the workflow again. The page now says **Groww** instead of **Demo prices**.
 
-bullScore = (b1 ? 1 : 0) + (b2 ? 1 : 0) + (b3 ? 1 : 0) + (b4 ? 1 : 0) + (b5 ? 1 : 0) + (b6 ? 1 : 0)
-bearScore = (s1 ? 1 : 0) + (s2 ? 1 : 0) + (s3 ? 1 : 0) + (s4 ? 1 : 0) + (s5 ? 1 : 0) + (s6 ? 1 : 0)
+Never put these values in a file in the repository. Secrets stay encrypted and are not shown in logs.
 
-bullAll = b1 and b2 and b3 and b4 and b5 and b6
-bearAll = s1 and s2 and s3 and s4 and s5 and s6
+### Optional settings
+**Settings → Secrets and variables → Actions → Variables:**
+- `LOT_SIZE` - Nifty lot size if it changes (default 65)
+- `NIFTY_EXPIRY` - a fixed expiry date `YYYY-MM-DD`. Leave it unset to use the next Tuesday weekly expiry (the scanner also tries a day or two earlier when a holiday moves it).
 
-// Session / day handling (Asia/Kolkata)
-inEntry = not na(time(timeframe.period, entrySess, "Asia/Kolkata"))
-inExit  = not na(time(timeframe.period, exitSess, "Asia/Kolkata"))
+## Using the page
+- The chain table runs your plan (target %, stop %, hold time, charges) on every strike. Change the plan on the left and the table recalculates.
+- Tap any strike to see its full breakdown and a table of other targets.
+- "Your expected Nifty move" lets you test how strong a directional view your plan needs before it pays off.
 
-var int tradesToday = 0
-if timeframe.change("D")
-    tradesToday := 0
+## Running the scanner on your own computer
+```
+pip install growwapi pyotp numpy
+python scanner/nifty_exit_odds.py --target 30 --stop 20 --hold 60
+python scanner/nifty_exit_odds.py --demo          # no Groww needed
+```
+Put your keys in `scanner/groww_keys.txt` (ignored by git):
+```
+GROWW_TOTP_TOKEN=...
+GROWW_TOTP_SECRET=...
+```
 
-flat     = strategy.position_size == 0
-canTrade = inEntry and flat and tradesToday < maxTrades
+## Things to know
+- GitHub sometimes starts scheduled runs a few minutes late, so the page can lag the market. Check the time shown on the page before using a number.
+- If the workflow fails at the Groww sign-in step, Groww may be limiting API access by IP address. GitHub's runners change IP addresses, so in that case run the scanner on your own computer instead.
+- Anyone with write access to this repository could use the workflow to read your Groww secrets. Don't add collaborators you don't fully trust.
+- The model ignores weekends, holidays and price gaps, so real stop-losses can fill worse than shown.
 
-longSig  = canTrade and bullAll and not bullAll[1]
-shortSig = canTrade and bearAll and not bearAll[1]
+## TradingView signal script (NOBC)
+`tradingview/nifty_option_buyer_confluence.pine` is a separate TradingView Pine Script for buying Nifty CE/PE intraday. It is an indicator, backtester and alert script in one.
 
-atmStrike = math.round(close / strikeStep) * strikeStep
+- **BUY CE / BUY PE** only when all 6 filters agree: EMA 9/21, Supertrend (10,3), RSI 55/45, ADX > 20 (no chop), VWAP side, and the 15-minute EMA50 trend.
+- Built-in risk rules: entries 09:30–14:30 IST, stop-loss 1× ATR, target 2× risk, early exit on Supertrend flip, square-off at 15:10, max 2 trades a day.
+- Dashboard shows each filter, a score out of 6 and the ATM strike.
 
-// ---------------------------- ORDERS ----------------------------------------
-var float slLvl = na
-var float tpLvl = na
+**Use it:** TradingView → Pine Editor → paste the file → Add to chart → `NSE:NIFTY`, 5-minute chart. See results in **Strategy Tester**. For alerts choose *"alert() function calls only"*.
 
-if longSig
-    risk = atr * slMult
-    slLvl := close - risk
-    tpLvl := close + risk * rr
-    strategy.entry("CE", strategy.long)
-    strategy.exit("CE-x", "CE", stop=slLvl, limit=tpLvl)
-    tradesToday += 1
-    alert("NIFTY BUY " + str.tostring(atmStrike) + " CE | Spot " + str.tostring(close, "#.##") + " | Spot SL " + str.tostring(slLvl, "#.##") + " | Spot Target " + str.tostring(tpLvl, "#.##"), alert.freq_once_per_bar_close)
-
-if shortSig
-    risk = atr * slMult
-    slLvl := close + risk
-    tpLvl := close - risk * rr
-    strategy.entry("PE", strategy.short)
-    strategy.exit("PE-x", "PE", stop=slLvl, limit=tpLvl)
-    tradesToday += 1
-    alert("NIFTY BUY " + str.tostring(atmStrike) + " PE | Spot " + str.tostring(close, "#.##") + " | Spot SL " + str.tostring(slLvl, "#.##") + " | Spot Target " + str.tostring(tpLvl, "#.##"), alert.freq_once_per_bar_close)
-
-// Early exit on Supertrend flip
-if useStExit and strategy.position_size > 0 and stDir > 0
-    strategy.close("CE", comment="ST flip")
-    alert("NIFTY EXIT CE — Supertrend flipped down", alert.freq_once_per_bar_close)
-if useStExit and strategy.position_size < 0 and stDir < 0
-    strategy.close("PE", comment="ST flip")
-    alert("NIFTY EXIT PE — Supertrend flipped up", alert.freq_once_per_bar_close)
-
-// Intraday square-off
-if inExit and not flat
-    strategy.close_all(comment="15:10 square-off")
-    alert("NIFTY SQUARE-OFF — close all option positions", alert.freq_once_per_bar_close)
-
-// ---------------------------- PLOTS -----------------------------------------
-plot(emaF, "EMA fast", color=color.new(color.aqua, 0), linewidth=1)
-plot(emaS, "EMA slow", color=color.new(color.orange, 0), linewidth=1)
-plot(useVwap ? vw : na, "VWAP", color=color.new(color.purple, 0), linewidth=2)
-plot(stLine, "Supertrend", color=stDir < 0 ? color.new(color.green, 0) : color.new(color.red, 0), linewidth=2, style=plot.style_linebr)
-
-plot(strategy.position_size != 0 ? slLvl : na, "Stop-loss", color=color.red, style=plot.style_linebr, linewidth=1)
-plot(strategy.position_size != 0 ? tpLvl : na, "Target", color=color.lime, style=plot.style_linebr, linewidth=1)
-
-plotshape(longSig, "BUY CE", shape.labelup, location.belowbar, color.new(color.green, 0), text="BUY CE", textcolor=color.white, size=size.small)
-plotshape(shortSig, "BUY PE", shape.labeldown, location.abovebar, color.new(color.red, 0), text="BUY PE", textcolor=color.white, size=size.small)
-
-// Shade background when market is choppy (ADX low) — option buyers should stay out
-bgcolor(useAdx and adx < adxMin ? color.new(color.gray, 90) : na, title="Choppy zone")
-
-// ---------------------------- DASHBOARD -------------------------------------
-var table dash = table.new(position.top_right, 3, 10, bgcolor=color.new(color.black, 15), border_width=1, border_color=color.new(color.gray, 60))
-
-f_row(r, name, val, bullOk, bearOk) =>
-    mark = bullOk and not bearOk ? "▲" : bearOk and not bullOk ? "▼" : "–"
-    bg = bullOk and not bearOk ? color.new(color.green, 30) : bearOk and not bullOk ? color.new(color.red, 30) : color.new(color.gray, 50)
-    table.cell(dash, 0, r, name, text_color=color.white, text_size=size.small, text_halign=text.align_left)
-    table.cell(dash, 1, r, val, text_color=color.white, text_size=size.small)
-    table.cell(dash, 2, r, mark, text_color=color.white, bgcolor=bg, text_size=size.small)
-
-if showDash and barstate.islast
-    table.cell(dash, 0, 0, "NOBC — Nifty", text_color=color.yellow, text_size=size.small)
-    table.cell(dash, 1, 0, "Value", text_color=color.yellow, text_size=size.small)
-    table.cell(dash, 2, 0, "Bias", text_color=color.yellow, text_size=size.small)
-    f_row(1, "EMA 9/21", b1 ? "9 > 21" : "9 < 21", b1, s1)
-    f_row(2, "Supertrend", stDir < 0 ? "Up" : "Down", b2, s2)
-    f_row(3, "RSI", str.tostring(rsi, "#.0"), b3, s3)
-    f_row(4, "ADX", str.tostring(adx, "#.0") + (adx < adxMin ? " chop" : ""), useAdx ? (adx > adxMin and diP > diM) : false, useAdx ? (adx > adxMin and diM > diP) : false)
-    f_row(5, "VWAP", close > vw ? "Above" : "Below", close > vw, close < vw)
-    f_row(6, "15m trend", htfClose > htfEma ? "Up" : "Down", htfClose > htfEma, htfClose < htfEma)
-    table.cell(dash, 0, 7, "Score", text_color=color.white, text_size=size.small, text_halign=text.align_left)
-    table.cell(dash, 1, 7, "CE " + str.tostring(bullScore) + "/6  PE " + str.tostring(bearScore) + "/6", text_color=color.white, text_size=size.small)
-    sigTxt = bullAll ? "CE READY" : bearAll ? "PE READY" : "WAIT"
-    sigBg = bullAll ? color.new(color.green, 0) : bearAll ? color.new(color.red, 0) : color.new(color.gray, 40)
-    table.cell(dash, 2, 7, sigTxt, text_color=color.white, bgcolor=sigBg, text_size=size.small)
-    table.cell(dash, 0, 8, "ATM strike", text_color=color.white, text_size=size.small, text_halign=text.align_left)
-    table.cell(dash, 1, 8, str.tostring(atmStrike), text_color=color.white, text_size=size.small)
-    table.cell(dash, 2, 8, "", text_color=color.white, text_size=size.small)
-    table.cell(dash, 0, 9, "Trades today", text_color=color.white, text_size=size.small, text_halign=text.align_left)
-    table.cell(dash, 1, 9, str.tostring(tradesToday) + " / " + str.tostring(maxTrades), text_color=color.white, text_size=size.small)
-    table.cell(dash, 2, 9, "", text_color=color.white, text_size=size.small)
+**Backtest caveat:** the tester trades Nifty spot (qty 65 = 1 lot). A real ATM option moves about half as much and loses time value, so real option results will be worse. Tune on one period, check on another, then paper-trade before using real money. Like the rest of this repo, it never places orders.
