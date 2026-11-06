@@ -8,7 +8,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -64,6 +64,33 @@ jobs:
             args="$args --demo"
           fi
           python scanner/nifty_exit_odds.py $args
+
+      - name: ORB paper trade (records prices only, never places orders)
+        if: steps.hours.outputs.open == 'true' && github.event_name == 'schedule'
+        continue-on-error: true
+        env:
+          GROWW_TOTP_TOKEN: ${{ secrets.GROWW_TOTP_TOKEN }}
+          GROWW_TOTP_SECRET: ${{ secrets.GROWW_TOTP_SECRET }}
+          LOT_SIZE: ${{ vars.LOT_SIZE }}
+        run: |
+          if [ -z "$GROWW_TOTP_TOKEN" ] || [ -z "$GROWW_TOTP_SECRET" ]; then
+            echo "::warning::Groww secrets are not set, so ORB paper trading is skipped."
+            exit 0
+          fi
+          python scanner/orb_paper.py --state docs/data/orb_paper.json --lot ${LOT_SIZE:-65}
+
+      - name: Save the paper-trade log
+        if: steps.hours.outputs.open == 'true' && github.event_name == 'schedule'
+        continue-on-error: true
+        run: |
+          [ -f docs/data/orb_paper.json ] || exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/orb_paper.json
+          git diff --cached --quiet && exit 0
+          git commit -m "ORB paper-trade log [skip ci]"
+          git pull --rebase origin main || true
+          git push origin HEAD:main
 
       - uses: actions/configure-pages@v5
         if: steps.hours.outputs.open == 'true'
