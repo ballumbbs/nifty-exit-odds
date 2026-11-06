@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ORB Paper Trades · Nifty</title>
+<style>
+:root{--bg:#f3f4f7;--panel:#fff;--ink:#151a2b;--muted:#5d6479;--line:#dde0e8;--accent:#d9480f;--gain:#14804a;--loss:#c22a3a;--band:#e8ebf3;
+  --body:system-ui,-apple-system,"Segoe UI",sans-serif;--mono:ui-monospace,"SFMono-Regular",Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1220;--panel:#171b2e;--ink:#e8eaf3;--muted:#9aa1b8;--line:#2a3049;--accent:#ff8a4c;--gain:#3ccf86;--loss:#ff6b7a;--band:#20263d;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--body)}
+.wrap{max-width:1000px;margin:0 auto;padding:20px 16px 48px}
+header h1{margin:0 0 4px;font-size:26px}
+header p{margin:0;color:var(--muted)}
+nav{margin:10px 0 18px;font-size:14px}
+nav a{color:var(--accent)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.card h2{margin:0 0 10px;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.status{font-size:18px;font-weight:600}
+.small{font-size:13px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.stat{background:var(--band);border-radius:10px;padding:10px 12px}
+.stat small{display:block;color:var(--muted);font-size:12px}
+.stat b{font:600 20px var(--mono)}
+.gain{color:var(--gain)}.loss{color:var(--loss)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase}
+td.num{font-family:var(--mono);text-align:right}
+.scroll{overflow-x:auto}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:600;color:#fff}
+.pill.BULL{background:var(--gain)}.pill.BEAR{background:var(--loss)}
+.note{font-size:13px;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>ORB Paper Trades</h1>
+    <p>Nifty opening-range breakout, traded on paper as a debit spread with real Groww prices. No real orders are ever placed.</p>
+  </header>
+  <nav><a href="./">← Nifty Exit Odds</a></nav>
+
+  <div class="card">
+    <h2>Right now</h2>
+    <div class="status" id="status">Loading…</div>
+    <div class="small" id="updated"></div>
+    <div class="grid" id="live" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Results so far</h2>
+    <div class="grid" id="summary"></div>
+    <p class="note" id="verdict"></p>
+  </div>
+
+  <div class="card">
+    <h2>Every trade (newest first)</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Date</th><th>Side</th><th>Spread</th><th>Entry</th><th>Cost/unit</th><th>Exit</th><th>Value/unit</th><th>Reason</th><th>P&amp;L (1 lot)</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="9" class="small">No trades yet.</td></tr></tbody>
+    </table></div>
+    <p class="note">Cost = buy price − sell price when the spread opened. Value = the same at exit. P&amp;L = (value − cost) × lot size − charges. Prices are recorded by a run every 5 minutes, so real fills can differ a little.</p>
+  </div>
+
+  <div class="card">
+    <h2>The rules</h2>
+    <ol class="small" style="margin:0;padding-left:20px">
+      <li>Opening range = the 09:15–09:30 candle (15-minute chart).</li>
+      <li>09:30–11:30: a 15-minute candle closes above the range (BULL) or below it (BEAR), on the same side of VWAP, with ADX above 20. One trade a day. Tuesdays (expiry) are skipped.</li>
+      <li>BULL: buy the ATM call, sell the call 150 points higher. BEAR: buy the ATM put, sell the put 150 points lower.</li>
+      <li>Exit when a candle closes back inside the range, Nifty reaches the other side of the range, Nifty moves 100 points in your favour, or at 15:00.</li>
+    </ol>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const rs=v=>(v<0?"−":"+")+"₹"+Math.abs(Math.round(v)).toLocaleString("en-IN");
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function stat(label,val,cls){return `<div class="stat"><small>${label}</small><b class="${cls||""}">${val}</b></div>`}
+function render(d){
+  $("status").textContent=d.status||"No data yet.";
+  $("updated").textContent=d.updated?"Last checked "+new Date(d.updated).toLocaleString("en-IN",{timeZone:"Asia/Kolkata",dateStyle:"medium",timeStyle:"short"})+" IST · refreshes every 5 minutes in market hours":"";
+  const L=d.live||{};
+  $("live").innerHTML=L.spot?[stat("Nifty",L.spot.toLocaleString("en-IN",{maximumFractionDigits:2})),
+    L.or_high!=null?stat("Range high",L.or_high):"",L.or_low!=null?stat("Range low",L.or_low):"",
+    L.vwap!=null?stat("VWAP",L.vwap):"",L.adx!=null?stat("ADX",L.adx,L.adx>20?"gain":"loss"):"",
+    stat("Expiry",L.expiry||"–")].join(""):"";
+  const T=(d.trades||[]).slice().reverse();
+  const closed=T.filter(t=>t.status==="CLOSED");
+  const wins=closed.filter(t=>t.pnl_lot>0), losses=closed.filter(t=>t.pnl_lot<=0);
+  const total=closed.reduce((s,t)=>s+t.pnl_lot,0);
+  const won=wins.reduce((s,t)=>s+t.pnl_lot,0), lost=-losses.reduce((s,t)=>s+t.pnl_lot,0);
+  let peak=0,eq=0,dd=0;closed.slice().reverse().forEach(t=>{eq+=t.pnl_lot;peak=Math.max(peak,eq);dd=Math.max(dd,peak-eq)});
+  const pf=lost>0?(won/lost):(won>0?Infinity:0);
+  $("summary").innerHTML=[stat("Trades",closed.length),stat("Won",closed.length?Math.round(100*wins.length/closed.length)+"%":"–"),
+    stat("Total P&L",closed.length?rs(total):"–",total>0?"gain":total<0?"loss":""),
+    stat("Profit factor",closed.length?(pf===Infinity?"∞":pf.toFixed(2)):"–",pf>=1.3?"gain":pf<1?"loss":""),
+    stat("Max drawdown",closed.length?"₹"+Math.round(dd).toLocaleString("en-IN"):"–")].join("");
+  $("verdict").textContent=closed.length<20?`${closed.length} of 20 paper trades done. Judge the setup only after about 20 trades: profit factor above 1.3 is promising, below 1.0 is losing.`
+    :(pf>=1.3?"Promising after 20+ trades: profit factor is above 1.3.":"After 20+ trades the profit factor is below 1.3: not good enough for real money.");
+  $("rows").innerHTML=T.length?T.map(t=>{
+    const open=t.status==="OPEN", p=open?t.pnl_now:t.pnl_lot;
+    return `<tr><td>${esc(t.date)}</td><td><span class="pill ${esc(t.side)}">${esc(t.side)}</span></td>
+      <td>Buy ${esc(t.buy)}<br><span class="small">Sell ${esc(t.sell)}</span></td>
+      <td>${esc(t.entry_time)}<br><span class="small">Nifty ${esc(t.entry_spot)}</span></td>
+      <td class="num">${esc(t.cost)}</td>
+      <td>${open?"<b>open</b>":esc(t.exit_time)+"<br><span class=small>Nifty "+esc(t.exit_spot)+"</span>"}</td>
+      <td class="num">${esc(open?(t.value_now??"–"):t.value_exit)}</td>
+      <td>${open?"–":esc(t.exit_reason)}</td>
+      <td class="num ${p>0?"gain":p<0?"loss":""}">${p==null?"–":rs(p)}${open?"<br><span class=small>so far</span>":""}</td></tr>`}).join(""):
+    `<tr><td colspan="9" class="small">No trades yet.</td></tr>`;
+}
+async function load(){
+  try{const r=await fetch("data/orb_paper.json?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw 0;render(await r.json())}
+  catch(e){$("status").textContent="No paper-trade data yet. It appears after the first run in market hours."}
+}
+load();setInterval(load,60000);
+</script>
+</body>
+</html>

@@ -65,3 +65,14 @@ GROWW_TOTP_SECRET=...
 **Use it:** TradingView → Pine Editor → paste the file → Add to chart → `NSE:NIFTY`, 5-minute chart. See results in **Strategy Tester**. For alerts choose *"alert() function calls only"*.
 
 **Backtest caveat:** the tester trades Nifty spot (qty 65 = 1 lot). A real ATM option moves about half as much and loses time value, so real option results will be worse. Tune on one period, check on another, then paper-trade before using real money. Like the rest of this repo, it never places orders.
+
+## Automatic ORB paper trading
+`scanner/orb_paper.py` runs inside the same 5-minute workflow and paper-trades the opening-range breakout setup (`tradingview/nifty_orb_spread.pine`) with **real Groww prices** but **no orders**.
+
+- 09:15–09:30: builds the opening range from 15-minute Nifty candles.
+- 09:30–11:30: when a 15-minute candle closes outside the range (right side of VWAP, ADX above 20), it records a debit spread: buy the ATM option, sell the one 150 points further out, at the live prices.
+- Closes it on paper when a candle closes back inside the range, Nifty hits the other side of the range, Nifty moves 100 points in favour, or at 15:00. Skips Tuesdays (expiry).
+- Every trade is saved in `docs/data/orb_paper.json` (the workflow commits it with `[skip ci]`) and shown at `https://ballumbbs.github.io/nifty-exit-odds/paper.html` with win rate, total P&L, profit factor and drawdown.
+- Needs the Groww secrets from step 3 above. Without them it does nothing.
+
+Judge it after about 20 trades: profit factor above 1.3 is promising, below 1.0 is losing.
