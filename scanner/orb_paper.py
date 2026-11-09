@@ -8,7 +8,7 @@ Runs every 5 minutes inside the GitHub workflow. Each run:
        - Opening range = 09:15-09:30 IST candle
        - Breakout window 09:30-11:30: a 15-min candle CLOSES outside the range,
          on the right side of VWAP, with ADX(14) above 20. Max 1 trade a day.
-       - Skips Tuesdays (weekly expiry).
+       - Skips expiry days: Tuesdays, and the earlier day when a holiday moves expiry.
        - Bull: buy ATM CE + sell CE `width` points higher. Bear: same with PEs.
        - Exits: candle closes back inside the range, spot reaches the other side
          of the range (stop), spot moves `target` points (target), or 15:00 IST.
@@ -178,6 +178,8 @@ def run(a):
     groww = groww_client()
     candles = fetch_candles(groww, now)
     spot, rows, expiry = chain_with_fallback(groww, now)
+    if expiry == now.date():
+        return finish("Expiry day (moved by a holiday) - skipped by the rules.")
     adx = adx_series(candles)
     for c, v in zip(candles, adx):
         c["adx"] = v
